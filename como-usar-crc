@@ -1,0 +1,1 @@
+calculaCRC(mensagem[começa com o endereço e termina com o último número da matrícula], tamanho(mensagem))

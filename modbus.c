@@ -4,6 +4,7 @@
 #include <termios.h> //Used for UART
 #include <stdlib.h>
 #include <string.h>
+#include "crc16.h"
 
 // definição de struct auxiliar para guardar os códigos
 struct codigos {
@@ -12,10 +13,12 @@ struct codigos {
     char c_str;
 };
 
+char endereco = 0x01;
+
 struct codigos codigos_solicitacao = {0xA1, 0xA2, 0xA3};
 struct codigos codigos_envio = {0xB1, 0xB2, 0xB3};
 
-int matricula = 1703;
+char matricula[4] = {1, 7, 0, 3};
 
 // lê os dados na rx
 void ler_dado(int *fs, char codigo) {
@@ -70,15 +73,21 @@ void solicitar_dado(int* fs, char codigo) {
     unsigned char *p_tx_buffer;
 
     p_tx_buffer = &tx_buffer[0];
-    *p_tx_buffer++ = codigo;
-    *p_tx_buffer++ = 1;
-    *p_tx_buffer++ = 7;
-    *p_tx_buffer++ = 0;
-    *p_tx_buffer++ = 3;
 
-    // int matricula = 1703;
-    // memcpy(&tx_buffer[1], &matricula, sizeof(matricula));
-    // p_tx_buffer += sizeof(matricula);
+    *p_tx_buffer++ = endereco;
+    *p_tx_buffer++ = 0x23;
+    *p_tx_buffer++ = codigo;
+
+    memcpy(&tx_buffer[3], &matricula, sizeof(matricula));
+    p_tx_buffer += sizeof(matricula);
+    /*
+    short crc = calcula_CRC(unsigned char *commands, sizeof());
+
+    memcpy(&tx_buffer[3 + sizeof(matricula)], &crc, sizeof(crc));
+    p_tx_buffer += sizeof(crc);
+    */
+    *p_tx_buffer++ = 0x5a;
+    *p_tx_buffer++ = 0x76;
 
     printf("\nBuffers de memória criados!\n");
     printf("Escrevendo caracteres na UART ...");
@@ -102,9 +111,11 @@ void menu(int* fs) {
     printf("1 - Solicitar inteiro\n");
     printf("2 - Solicitar float\n");
     printf("3 - Solicitar string\n");
+    /*
     printf("4 - Enviar inteiro\n");
     printf("5 - Enviar float\n");
     printf("6 - Enviar string\n");
+    */
     printf("7 - Fechar programa\n");
 
     // receber entrada
@@ -160,7 +171,7 @@ int main()
     // setar options de mensagem
     struct termios options;
     tcgetattr(uart0_filestream, &options);
-    options.c_cflag = B9600 | CS8 | CLOCAL | CREAD; //<Set baud rate
+    options.c_cflag = B115200 | CS8 | CLOCAL | CREAD; //<Set baud rate
     options.c_iflag = IGNPAR;
     options.c_oflag = 0;
     options.c_lflag = 0;
@@ -169,11 +180,9 @@ int main()
     tcflush(uart0_filestream, TCIFLUSH);
     tcsetattr(uart0_filestream, TCSANOW, &options);
 
-
-    while(1) {
-        menu(&uart0_filestream);
-    }
+    menu(&uart0_filestream);
 
     close(uart0_filestream);
     return 0;
 }
+
