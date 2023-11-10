@@ -11,12 +11,13 @@ struct codigos {
     char c_int;
     char c_float;
     char c_str;
+    char comando;
 };
 
 char endereco = 0x01;
 
-struct codigos codigos_solicitacao = {0xA1, 0xA2, 0xA3};
-struct codigos codigos_envio = {0xB1, 0xB2, 0xB3};
+struct codigos codigos_solicitacao = {0xA1, 0xA2, 0xA3, 0x23};
+struct codigos codigos_envio = {0xB1, 0xB2, 0xB3, 0x16};
 
 char matricula[4] = {1, 7, 0, 3};
 
@@ -68,6 +69,78 @@ void ler_dado(int *fs, char codigo) {
     }
 }
 
+// enviar dados usando a tx
+void enviar_dados(int* fs, char codigo) {
+    unsigned char tx_buffer[255];
+    unsigned char *p_tx_buffer;
+
+    p_tx_buffer = &tx_buffer[0];
+
+    *p_tx_buffer++ = endereco;
+    *p_tx_buffer++ = codigos_envio.comando;
+    *p_tx_buffer++ = codigo;
+
+    unsigned int size_dado = 0;
+    unsigned int pos_inicial = 3;
+    if(codigo == codigos_envio.c_int) {
+        int dado = 0;
+        printf("Qual inteiro você deseja enviar? ");
+        scanf("%d", &dado);
+
+        memcpy(&tx_buffer[pos_inicial], &dado, sizeof(dado));
+        p_tx_buffer += sizeof(dado);
+
+        size_dado = sizeof(dado);
+
+    }
+
+    if(codigo == codigos_envio.c_float) {
+        float dado = 0;
+        printf("Qual valor em ponto flutuante você deseja enviar? ");
+        scanf("%f", &dado);
+
+        memcpy(&tx_buffer[pos_inicial], &dado, sizeof(dado));
+        p_tx_buffer += sizeof(dado);
+        size_dado = sizeof(dado);
+
+    }
+
+    if(codigo == codigos_envio.c_str) {
+        printf("Enviando string de teste...\n");
+        char* dado = "string de teste para envio utilizando uart\n";
+        char tamanho = (char) strlen(dado);
+        *p_tx_buffer++ = tamanho;
+
+        pos_inicial++;
+        memcpy(&tx_buffer[pos_inicial], dado, strlen(dado));
+        p_tx_buffer += strlen(dado);
+        size_dado = strlen(dado);
+
+    }
+
+    memcpy(&tx_buffer[pos_inicial + size_dado], &matricula, sizeof(matricula));
+    p_tx_buffer += sizeof(matricula);
+
+    short crc = calcula_CRC(tx_buffer, (p_tx_buffer - &tx_buffer[0]));
+    memcpy(&tx_buffer[pos_inicial + sizeof(matricula) + size_dado], &crc, sizeof(crc));
+    p_tx_buffer += sizeof(crc);
+
+    printf("\nBuffers de memória criados!\n");
+    printf("Escrevendo caracteres na UART ...");
+
+    int count = write(*fs, &tx_buffer, (p_tx_buffer - &tx_buffer[0]));
+    if (count <= 0) {
+        printf("UART TX error\n");
+    }
+    else {
+        printf("escrito.\n");
+    }
+
+
+
+}
+
+// envia dados usando a tx
 void solicitar_dado(int* fs, char codigo) {
     unsigned char tx_buffer[20];
     unsigned char *p_tx_buffer;
@@ -75,19 +148,16 @@ void solicitar_dado(int* fs, char codigo) {
     p_tx_buffer = &tx_buffer[0];
 
     *p_tx_buffer++ = endereco;
-    *p_tx_buffer++ = 0x23;
+    *p_tx_buffer++ = codigos_solicitacao.comando;
     *p_tx_buffer++ = codigo;
 
     memcpy(&tx_buffer[3], &matricula, sizeof(matricula));
     p_tx_buffer += sizeof(matricula);
-    /*
-    short crc = calcula_CRC(unsigned char *commands, sizeof());
 
+    // calcular crc
+    short crc = calcula_CRC(tx_buffer, (p_tx_buffer - &tx_buffer[0]));
     memcpy(&tx_buffer[3 + sizeof(matricula)], &crc, sizeof(crc));
     p_tx_buffer += sizeof(crc);
-    */
-    *p_tx_buffer++ = 0x5a;
-    *p_tx_buffer++ = 0x76;
 
     printf("\nBuffers de memória criados!\n");
     printf("Escrevendo caracteres na UART ...");
@@ -111,11 +181,9 @@ void menu(int* fs) {
     printf("1 - Solicitar inteiro\n");
     printf("2 - Solicitar float\n");
     printf("3 - Solicitar string\n");
-    /*
     printf("4 - Enviar inteiro\n");
     printf("5 - Enviar float\n");
     printf("6 - Enviar string\n");
-    */
     printf("7 - Fechar programa\n");
 
     // receber entrada
@@ -136,9 +204,13 @@ void menu(int* fs) {
             solicitar_dado(fs, codigos_solicitacao.c_str);
             break;
         case 4:
+            enviar_dados(fs, codigos_envio.c_int);
+            break;
         case 5:
+            enviar_dados(fs, codigos_envio.c_float);
+            break;
         case 6:
-            printf("Não implementado\n");
+            enviar_dados(fs, codigos_envio.c_str);
             break;
         case 7:
             close(*fs);
